@@ -151,26 +151,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Handle reactions
+        // Handle reactions - improved to handle both string content and JSON format
         if (data.type === 'reaction' && userData) {
-          const reaction = await storage.createReaction({
-            roomId: userData.roomId,
-            userId: userData.userId,
-            type: data.reactionType
-          });
-          
-          // Broadcast to all clients in the room
-          const roomClients = roomConnections.get(userData.roomId) || new Set();
-          const outMessage = JSON.stringify({
-            type: 'reaction',
-            reaction
-          });
-          
-          roomClients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN) {
-              client.send(outMessage);
+          try {
+            // Handle different reaction message formats
+            // If reactionType is a string (direct value), use it
+            // Otherwise, it might be a JSON object from room-chat.tsx
+            const reactionType = typeof data.reactionType === 'string' 
+              ? data.reactionType 
+              : (typeof data === 'object' && data.reactionType ? data.reactionType : null);
+            
+            if (!reactionType) {
+              throw new Error('Invalid reaction format: missing reactionType');
             }
-          });
+            
+            // Get user info for richer context
+            const user = await storage.getUser(userData.userId);
+            
+            // Create the reaction in database
+            const reaction = await storage.createReaction({
+              roomId: userData.roomId,
+              userId: userData.userId,
+              type: reactionType
+            });
+            
+            // Broadcast to all clients in the room with user info for context
+            const roomClients = roomConnections.get(userData.roomId) || new Set();
+            const outMessage = JSON.stringify({
+              type: 'reaction',
+              reaction: {
+                ...reaction,
+                user: {
+                  id: user?.id,
+                  username: user?.username
+                }
+              }
+            });
+            
+            roomClients.forEach(client => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(outMessage);
+              }
+            });
+          } catch (error) {
+            console.error('Error processing reaction:', error);
+            ws.send(JSON.stringify({ 
+              type: 'error', 
+              message: 'Failed to process reaction: ' + (error instanceof Error ? error.message : 'Unknown error')
+            }));
+          }
         }
       } catch (error) {
         console.error('WebSocket message error:', error);

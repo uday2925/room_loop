@@ -83,11 +83,11 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
   const sendReactionMutation = useMutation({
     mutationFn: async (type: ReactionType) => {
       // Try to send reaction via WebSocket first
-      // We can use the same onSendMessage channel but with a different message type
-      const websocketSuccess = onSendMessage(JSON.stringify({
+      // We use the same onSendMessage channel but sending as a regular message object, not a JSON string
+      const websocketSuccess = onSendMessage({
         type: 'reaction',
         reactionType: type
-      }));
+      });
       
       // If WebSocket worked, no need for API call
       if (websocketSuccess === true) {
