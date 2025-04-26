@@ -155,11 +155,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (data.type === 'reaction' && userData) {
           try {
             // Handle different reaction message formats
-            // If reactionType is a string (direct value), use it
-            // Otherwise, it might be a JSON object from room-chat.tsx
-            const reactionType = typeof data.reactionType === 'string' 
-              ? data.reactionType 
-              : (typeof data === 'object' && data.reactionType ? data.reactionType : null);
+            let reactionType = null;
+            
+            // Log the received data for debugging
+            console.log('Reaction data received:', JSON.stringify(data));
+            
+            // Check various formats the reaction might come in
+            if (typeof data.reactionType === 'string') {
+              // Direct string format from client
+              reactionType = data.reactionType;
+            } else if (data.content && typeof data.content === 'string') {
+              // JSON stringified format 
+              try {
+                const parsedContent = JSON.parse(data.content);
+                if (parsedContent && parsedContent.reactionType) {
+                  reactionType = parsedContent.reactionType;
+                }
+              } catch (e) {
+                // Not valid JSON, ignore
+              }
+            }
             
             if (!reactionType) {
               throw new Error('Invalid reaction format: missing reactionType');

@@ -8,6 +8,9 @@ interface WebSocketMessage {
   [key: string]: any;
 }
 
+// We need to accept string | object for proper message type handling
+type WebSocketSendMessage = WebSocketMessage | string;
+
 interface WebSocketOptions {
   enabled: boolean;
   roomId: number;
@@ -189,11 +192,27 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
     };
   }, [enabled, roomId, userId, createWebSocketConnection]);
   
-  // Send message through WebSocket
-  const sendMessage = useCallback((message: WebSocketMessage): boolean => {
+  // Send message through WebSocket - handle both string and object formats
+  const sendMessage = useCallback((message: WebSocketSendMessage): boolean => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       try {
-        socketRef.current.send(JSON.stringify(message));
+        // Handle different message formats
+        if (typeof message === 'string') {
+          // Check if it's already a JSON string
+          if (message.startsWith('{') && message.endsWith('}')) {
+            console.log('Sending pre-formatted JSON string');
+            socketRef.current.send(message);
+          } else {
+            // Plain text message
+            socketRef.current.send(JSON.stringify({
+              type: 'message',
+              content: message
+            }));
+          }
+        } else {
+          // Object - convert to JSON
+          socketRef.current.send(JSON.stringify(message));
+        }
         return true;
       } catch (error) {
         console.error("Failed to send message:", error);
