@@ -504,20 +504,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Room is not currently live' });
       }
       
-      // Check if room is at max capacity
-      if (room.maxParticipants) {
-        const participants = await storage.getRoomParticipants(roomId);
-        if (participants.length >= room.maxParticipants) {
-          return res.status(400).json({ message: 'Room is at maximum capacity' });
-        }
-      }
-      
-      // Check if user is already a participant
+      // Check if user is already a participant - checking this BEFORE max capacity
       const userId = req.user!.id;
       const isParticipant = await storage.isRoomParticipant(roomId, userId);
       if (isParticipant) {
         // If user is already a participant, silently succeed instead of returning an error
         return res.status(200).json({ message: 'Already a participant in this room' });
+      }
+      
+      // Check if room is at max capacity - only check for new participants
+      if (room.maxParticipants) {
+        const participants = await storage.getRoomParticipants(roomId);
+        if (participants.length >= room.maxParticipants) {
+          return res.status(400).json({ message: 'Room is at maximum capacity' });
+        }
       }
       
       // Check room type and permission

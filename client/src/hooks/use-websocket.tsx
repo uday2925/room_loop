@@ -3,6 +3,8 @@ import { useToast } from "@/hooks/use-toast";
 
 interface WebSocketMessage {
   type: string;
+  content?: string;
+  reactionType?: string;
   [key: string]: any;
 }
 
@@ -92,12 +94,21 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
           setMessages(prev => {
             // Use Map to deduplicate messages by ID
             const newMap = new Map(prev);
-            if (message.id) {
+            
+            // For messages with an ID, check if we already have it to avoid replacing existing ones
+            if (message.id && !newMap.has(message.id)) {
               newMap.set(message.id, message);
-            } else {
-              // For temporary messages without ID, use timestamp + content as key
-              const tempKey = `temp-${Date.now()}-${message.content.substring(0, 20)}`;
-              newMap.set(tempKey, message);
+            } 
+            // For messages without an ID (like temporary messages), always add as new
+            else if (!message.id) {
+              // Generate a unique key with timestamp to prevent collisions
+              const timestamp = Date.now();
+              const tempKey = `temp-${timestamp}-${Math.random().toString(36).substring(2, 9)}-${message.content.substring(0, 10)}`;
+              newMap.set(tempKey, {
+                ...message,
+                // Add an artificial ID to the message to prevent future replacements
+                id: tempKey 
+              });
             }
             return newMap;
           });
