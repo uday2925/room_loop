@@ -121,7 +121,7 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
             };
             
             // Check if this message is from the current user by comparing with the user's ID in the message
-            const isCurrentUser = window?.user?.id === message.userId;
+            const isCurrentUser = user?.id === message.userId;
             
             return (
               <div 
