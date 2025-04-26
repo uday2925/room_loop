@@ -51,7 +51,7 @@ export default function Sidebar({ activePage }: SidebarProps) {
             Explore
           </a>
         </Link>
-        <Link href="/schedule">
+        {/* <Link href="/schedule">
           <a className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
             activePage === "schedule" 
               ? "bg-primary-50 text-primary-700" 
@@ -75,7 +75,7 @@ export default function Sidebar({ activePage }: SidebarProps) {
             Notifications
             <Badge className="ml-auto bg-accent text-white">3</Badge>
           </a>
-        </Link>
+        </Link> */}
       </nav>
       <div className="p-4 border-t border-gray-200">
         <div className="flex items-center justify-between">
