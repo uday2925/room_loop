@@ -156,9 +156,37 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
           if (data.emoji) {
             console.log("Received simplified reaction:", data.emoji);
             
+            // Skip reactions from the server where we already have a local version
+            // This is the key fix for preventing duplicate reactions
+            if (data.userId === userId) {
+              console.log("This is our own reaction coming back from the server. Checking if we should skip it.");
+              
+              // Skip this reaction from the server if we already have a local version
+              let shouldSkip = false;
+              
+              // Search for an existing local reaction that matches this one
+              for (const msg of messages.values()) {
+                if (msg.type === 'reaction' && 
+                    msg.content === data.emoji && 
+                    msg.userId === userId &&
+                    msg.isLocalEcho === true) {
+                  
+                  // If found a matching local echo, skip processing this server response
+                  console.log("Found matching local reaction, skipping server version to avoid duplicates");
+                  shouldSkip = true;
+                  break;
+                }
+              }
+              
+              if (shouldSkip) {
+                return; // Skip processing this message completely
+              }
+              
+              console.log("No matching local reaction found, will process this server reaction");
+            }
+            
             // Create a more deterministic reaction key that will be the same 
             // for both sent and received versions of the same reaction
-            // This is crucial for preventing duplicates on the sender side
             const stableTimestampPart = data.timestamp ? 
               new Date(data.timestamp).getTime() : 
               Math.floor(Date.now() / 1000) * 1000; // Round to nearest second
@@ -325,8 +353,64 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
       try {
         // Handle different message formats
         if (typeof message === 'string') {
+          // Check if it's a reaction message (special handling to prevent duplicates)
+          if (message.startsWith('REACTION:')) {
+            console.log('Sending reaction:', message);
+            
+            // For reactions, we'll handle the local state update here directly
+            // This prevents the duplicate display issue
+            const emoji = message.split('REACTION:')[1];
+            
+            // Only add the reaction to the state if it's valid
+            if (emoji) {
+              // Create a unique key for this reaction to prevent duplicates
+              const reactionKey = `reaction-local-${Date.now()}-${emoji}-${userId}`;
+              
+              // Add to local state first before sending to server
+              setMessages(prev => {
+                // First check if we've sent this reaction type recently
+                let shouldAdd = true;
+                
+                // Look for recently sent reactions of the same type from this user
+                for (const [key, msg] of prev.entries()) {
+                  if (msg.type === 'reaction' && 
+                      msg.content === emoji && 
+                      msg.userId === userId &&
+                      // Check if created in the last 5 seconds
+                      new Date().getTime() - new Date(msg.createdAt).getTime() < 5000) {
+                    shouldAdd = false;
+                    break;
+                  }
+                }
+                
+                if (!shouldAdd) {
+                  console.log("Skipping duplicate local reaction:", emoji);
+                  return prev;
+                }
+                
+                // Add to the local state
+                const newMap = new Map(prev);
+                newMap.set(reactionKey, { 
+                  type: 'reaction',
+                  id: reactionKey,
+                  content: emoji,
+                  userId: userId,
+                  username: "You", // Temporary username for immediate feedback
+                  createdAt: new Date().toISOString(),
+                  isLocalEcho: true  // Mark as local echo to identify later if needed
+                });
+                return newMap;
+              });
+            }
+            
+            // Send the message to the server
+            socketRef.current.send(JSON.stringify({
+              type: 'message',
+              content: message
+            }));
+          }
           // Check if it's already a JSON string
-          if (message.startsWith('{') && message.endsWith('}')) {
+          else if (message.startsWith('{') && message.endsWith('}')) {
             console.log('Sending pre-formatted JSON string');
             socketRef.current.send(message);
           } else {
@@ -352,7 +436,7 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
       }
       return false;
     }
-  }, [enabled, createWebSocketConnection]);
+  }, [enabled, createWebSocketConnection, userId, setMessages]);
   
   // Reset messages when room changes
   useEffect(() => {
