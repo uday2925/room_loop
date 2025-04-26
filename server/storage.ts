@@ -45,14 +45,17 @@ export interface IStorage {
   getRoomReactions(roomId: number): Promise<Reaction[]>;
   
   // Utils
-  updateRoomStatuses(): Promise<void>;
+  updateRoomStatuses(): Promise<{
+    goingLive: Room[];
+    goingClosed: Room[];
+  }>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: any; // Using 'any' for session store to avoid type conflicts
 }
 
 export class DatabaseStorage implements IStorage {
-  sessionStore: session.SessionStore;
+  sessionStore: any; // Using any for session store
   
   constructor() {
     this.sessionStore = new PostgresSessionStore({ 
@@ -281,25 +284,47 @@ export class DatabaseStorage implements IStorage {
   }
   
   // Utils
-  async updateRoomStatuses(): Promise<void> {
+  async updateRoomStatuses(): Promise<{
+    goingLive: Room[];
+    goingClosed: Room[];
+  }> {
     const now = new Date();
     
-    // Update scheduled rooms to live
-    await db.update(rooms)
-      .set({ status: "live" })
+    // Find rooms that should be live (currently scheduled but within time window)
+    const roomsToGoLive = await db.select()
+      .from(rooms)
       .where(and(
         eq(rooms.status, "scheduled"),
         lte(rooms.startTime, now),
         gte(rooms.endTime, now)
       ));
+    
+    if (roomsToGoLive.length > 0) {
+      // Update them to live status
+      await db.update(rooms)
+        .set({ status: "live" })
+        .where(inArray(rooms.id, roomsToGoLive.map(r => r.id)));
+    }
       
-    // Update live rooms to closed
-    await db.update(rooms)
-      .set({ status: "closed" })
+    // Find rooms that should be closed (currently live but past end time)
+    const roomsToClose = await db.select()
+      .from(rooms)
       .where(and(
         eq(rooms.status, "live"),
         lte(rooms.endTime, now)
       ));
+    
+    if (roomsToClose.length > 0) {
+      // Update them to closed status
+      await db.update(rooms)
+        .set({ status: "closed" })
+        .where(inArray(rooms.id, roomsToClose.map(r => r.id)));
+    }
+    
+    return {
+      goingLive: roomsToGoLive,
+      goingClosed: roomsToClose
+    };
   }
 }
 

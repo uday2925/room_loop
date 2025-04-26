@@ -198,7 +198,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update room statuses periodically (every minute)
   setInterval(async () => {
     try {
-      await storage.updateRoomStatuses();
+      // Get rooms that had their status changed
+      const { goingLive, goingClosed } = await storage.updateRoomStatuses();
+      
+      // Broadcast status changes to all connected clients
+      if (goingLive.length > 0 || goingClosed.length > 0) {
+        // Iterate through all WebSocket connections
+        for (const [wsRoomId, clients] of roomConnections.entries()) {
+          clients.forEach(client => {
+            if (client.readyState !== WebSocket.OPEN) return;
+            
+            // Notify about rooms going live
+            goingLive.forEach(room => {
+              client.send(JSON.stringify({
+                type: 'room_status_update',
+                roomId: room.id,
+                room: {
+                  id: room.id,
+                  title: room.title,
+                  status: 'live' // The new status
+                }
+              }));
+            });
+            
+            // Notify about rooms being closed
+            goingClosed.forEach(room => {
+              client.send(JSON.stringify({
+                type: 'room_status_update',
+                roomId: room.id,
+                room: {
+                  id: room.id,
+                  title: room.title,
+                  status: 'closed' // The new status
+                }
+              }));
+            });
+          });
+        }
+      }
     } catch (error) {
       console.error('Error updating room statuses:', error);
     }
@@ -559,6 +596,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const reaction = await storage.createReaction(reactionData);
       
+      // Broadcast the reaction to all clients in the room
+      const roomClients = roomConnections.get(roomId) || new Set();
+      roomClients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          // Get user info for better context
+          const user = req.user!;
+          
+          client.send(JSON.stringify({
+            type: 'reaction',
+            reaction: {
+              ...reaction,
+              user: { 
+                id: user.id,
+                username: user.username 
+              }
+            }
+          }));
+        }
+      });
+      
       res.status(201).json(reaction);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -592,6 +649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Handle invitation
       let invitation;
+      let invitedUserId: number | null = null;
       
       if (req.body.username) {
         // Find user by username
@@ -599,6 +657,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!invitedUser) {
           return res.status(404).json({ message: 'User not found' });
         }
+        
+        // Store the user ID for notification
+        invitedUserId = invitedUser.id;
         
         // Create invitation
         invitation = await storage.createRoomInvitation({
@@ -613,6 +674,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } else {
         return res.status(400).json({ message: 'Either username or email must be provided' });
+      }
+      
+      // Send real-time notification to invited user if they're connected
+      if (invitedUserId) {
+        // Notify the invited user through any active WebSocket connections
+        for (const [wsRoomId, clients] of roomConnections.entries()) {
+          clients.forEach(client => {
+            if (client.readyState !== WebSocket.OPEN) return;
+            
+            // Check if this client belongs to the invited user
+            const clientData = (client as any).userData as WebSocketData | undefined;
+            if (!clientData || clientData.userId !== invitedUserId) return;
+            
+            // Send invitation notification
+            client.send(JSON.stringify({
+              type: 'room_invitation',
+              room: {
+                id: room.id,
+                title: room.title,
+                description: room.description,
+                status: room.status,
+                startTime: room.startTime,
+                endTime: room.endTime
+              },
+              invitation,
+              message: `You've been invited to join "${room.title}"`
+            }));
+          });
+        }
       }
       
       res.status(201).json(invitation);
