@@ -21,7 +21,7 @@ interface RoomChatProps {
   roomId: number;
   messages: any[];
   participants: User[];
-  onSendMessage: (content: string) => boolean;
+  onSendMessage: (content: string | object) => boolean;
 }
 
 export default function RoomChat({ roomId, messages, participants, onSendMessage }: RoomChatProps) {

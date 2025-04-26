@@ -275,7 +275,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.status(401).json({ message: 'Unauthorized' });
     
     try {
-      await storage.updateRoomStatuses();
+      // Always update room statuses before returning data
+      // This ensures room status is updated on every API call
+      const { goingLive, goingClosed } = await storage.updateRoomStatuses();
+      
+      // If any rooms changed status, broadcast to connected clients
+      // This makes status updates more frequent and reliable
+      if (goingLive.length > 0 || goingClosed.length > 0) {
+        console.log(`Room status updates: ${goingLive.length} going live, ${goingClosed.length} closing`);
+        
+        // Iterate through all WebSocket connections to broadcast the updates
+        for (const [wsRoomId, clients] of roomConnections.entries()) {
+          clients.forEach(client => {
+            if (client.readyState !== WebSocket.OPEN) return;
+            
+            // Notify about rooms going live
+            goingLive.forEach(room => {
+              client.send(JSON.stringify({
+                type: 'room_status_update',
+                roomId: room.id,
+                room: {
+                  id: room.id,
+                  title: room.title,
+                  status: 'live' // The new status
+                }
+              }));
+            });
+            
+            // Notify about rooms being closed
+            goingClosed.forEach(room => {
+              client.send(JSON.stringify({
+                type: 'room_status_update',
+                roomId: room.id,
+                room: {
+                  id: room.id,
+                  title: room.title,
+                  status: 'closed' // The new status
+                }
+              }));
+            });
+          });
+        }
+      }
       
       const user = req.user!;
       const createdRooms = await storage.getRoomsByCreator(user.id);
