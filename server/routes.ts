@@ -39,11 +39,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             roomId: data.roomId
           };
           
+          // Store userData directly on the websocket object for room broadcasts
+          (ws as any).userData = userData;
+          
           // Add to room connections
           if (!roomConnections.has(userData.roomId)) {
             roomConnections.set(userData.roomId, new Set());
           }
           roomConnections.get(userData.roomId)?.add(ws);
+          
+          // For global notification connections (roomId = 0)
+          if (userData.roomId === 0) {
+            // Global connection for notifications across all rooms
+            if (!roomConnections.has(0)) {
+              roomConnections.set(0, new Set());
+            }
+            roomConnections.get(0)?.add(ws);
+          }
           
           // Send confirmation
           ws.send(JSON.stringify({ type: 'init', success: true }));
@@ -236,8 +248,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const room = await storage.createRoom(roomData);
+      const roomType = room.type;
       
-      // Process invitations if provided
+      // Process invitations if provided and track invited user IDs
+      const invitedUserIds = new Set<number>();
       if (req.body.invitations && Array.isArray(req.body.invitations)) {
         for (const invite of req.body.invitations) {
           try {
@@ -248,6 +262,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   roomId: room.id,
                   userId: user.id
                 });
+                
+                // Add to invited users set for later notification
+                invitedUserIds.add(user.id);
               }
             } else if (invite.email) {
               await storage.createRoomInvitation({
@@ -260,6 +277,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Continue with other invitations even if one fails
           }
         }
+      }
+      
+      // Broadcast room creation to all relevant WebSocket clients
+      for (const [wsRoomId, clients] of roomConnections.entries()) {
+        clients.forEach(client => {
+          if (client.readyState !== WebSocket.OPEN) return;
+          
+          // Extract client data to identify user
+          const clientData = (client as any).userData as WebSocketData | undefined;
+          if (!clientData) return;
+          
+          // For public rooms, notify everyone
+          if (roomType === 'public') {
+            client.send(JSON.stringify({
+              type: 'room_created',
+              room
+            }));
+          }
+          // For private rooms, only notify invited users
+          else if (roomType === 'private' && invitedUserIds.has(clientData.userId)) {
+            client.send(JSON.stringify({
+              type: 'room_invitation',
+              room,
+              message: 'You have been invited to a new room'
+            }));
+          }
+        });
       }
       
       res.status(201).json(room);
@@ -306,9 +350,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (room.status === 'live' && !isWithinTimeWindow) {
         await storage.updateRoomStatus(roomId, 'closed');
         room.status = 'closed';
+        
+        // Broadcast status change to all connected clients
+        for (const [wsRoomId, clients] of roomConnections.entries()) {
+          clients.forEach(client => {
+            if (client.readyState !== WebSocket.OPEN) return;
+            
+            client.send(JSON.stringify({
+              type: 'room_status_update',
+              roomId,
+              room: {
+                id: room.id,
+                title: room.title,
+                status: 'closed'
+              }
+            }));
+          });
+        }
       } else if (room.status === 'scheduled' && isWithinTimeWindow) {
         await storage.updateRoomStatus(roomId, 'live');
         room.status = 'live';
+        
+        // Broadcast status change to all connected clients
+        for (const [wsRoomId, clients] of roomConnections.entries()) {
+          clients.forEach(client => {
+            if (client.readyState !== WebSocket.OPEN) return;
+            
+            client.send(JSON.stringify({
+              type: 'room_status_update',
+              roomId,
+              room: {
+                id: room.id,
+                title: room.title,
+                status: 'live'
+              }
+            }));
+          });
+        }
       }
       
       // Get participants

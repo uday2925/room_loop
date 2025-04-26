@@ -10,6 +10,7 @@ import AuthPage from "@/pages/auth-page";
 import ExplorePage from "@/pages/explore-page";
 import RoomPage from "@/pages/room-page";
 import { ProtectedRoute } from "./lib/protected-route";
+import { useGlobalNotifications } from "@/hooks/use-global-notifications";
 
 function Router() {
   return (
@@ -23,12 +24,21 @@ function Router() {
   );
 }
 
+// This component will set up global notification listeners
+function GlobalNotificationHandler() {
+  // This hook will automatically set up websocket listeners
+  // and handle notifications like new rooms, invitations, and status changes
+  useGlobalNotifications();
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
+          <GlobalNotificationHandler />
           <Router />
         </TooltipProvider>
       </AuthProvider>

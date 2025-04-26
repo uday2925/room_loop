@@ -119,14 +119,27 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
       {/* Chat messages */}
       <ScrollArea className="flex-grow p-4">
         <div className="space-y-4">
-          {/* Remove duplicates by using a Set with message IDs */}
+          {/* More aggressive duplicate message filtering with multiple check strategies */}
           {Array.from(
             new Map(
+              // First filter out reactions
               messages
                 .filter(message => message.type !== 'reaction')
-                .map(message => [message.id, message])
+                // Then deduplicate using a more sophisticated approach
+                // First by ID if available
+                // Then by content + userId + approximate timestamp (rounded to the nearest second)
+                .map(message => {
+                  // Create a composite key for messages without IDs
+                  const key = message.id ? 
+                    message.id : 
+                    `${message.userId}-${message.content}-${Math.floor(new Date(message.createdAt).getTime() / 1000)}`;
+                  return [key, message];
+                })
             ).values()
-          ).map((message, index) => {
+          )
+          // Sort by timestamp to ensure messages appear in chronological order
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+          .map((message, index) => {
             // Find the user for this message
             const messageUser = participants.find(p => p.id === message.userId) || { 
               username: 'Unknown User' 
