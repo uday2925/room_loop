@@ -78,11 +78,28 @@ export default function RoomPage() {
     userId: user?.id as number
   });
   
-  // Combine backend messages with WebSocket messages
-  const allMessages = [
-    ...(roomData?.messages || []),
-    ...(messages || [])
-  ].sort((a, b) => 
+  // We need to deduplicate messages from the backend and WebSocket
+  const messageMap = new Map();
+  
+  // First add backend messages to the map
+  (roomData?.messages || []).forEach(message => {
+    if (message.id) {
+      messageMap.set(message.id, message);
+    }
+  });
+  
+  // Then add WebSocket messages, which will overwrite duplicates
+  (messages || []).forEach(message => {
+    if (message.id) {
+      messageMap.set(message.id, message);
+    } else {
+      // For temporary messages without an ID
+      messageMap.set(`temp-${Date.now()}`, message);
+    }
+  });
+  
+  // Convert map to sorted array
+  const allMessages = Array.from(messageMap.values()).sort((a, b) => 
     new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
   

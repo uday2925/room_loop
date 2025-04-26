@@ -12,9 +12,12 @@ interface WebSocketOptions {
   userId: number;
 }
 
+// Use a type that can be number or string for message IDs
+type MessageKey = number | string;
+
 export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
   const [connected, setConnected] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Map<MessageKey, any>>(new Map());
   const socketRef = useRef<WebSocket | null>(null);
   const { toast } = useToast();
   
@@ -47,9 +50,19 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
         
         // Handle different message types
         if (data.type === 'message') {
-          setMessages(prev => [...prev, data.message]);
-        } else if (data.type === 'reaction') {
-          // Reactions are handled separately in the room data
+          const message = data.message;
+          setMessages(prev => {
+            // Use Map to deduplicate messages by ID
+            const newMap = new Map(prev);
+            if (message.id) {
+              newMap.set(message.id, message);
+            } else {
+              // For temporary messages without ID, use timestamp as key
+              const tempKey = `temp-${Date.now()}`;
+              newMap.set(tempKey, message);
+            }
+            return newMap;
+          });
         } else if (data.type === 'error') {
           toast({
             title: "WebSocket Error",
@@ -87,6 +100,7 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
   const sendMessage = useCallback((message: WebSocketMessage) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(message));
+      // Return true if the message was sent successfully
       return true;
     }
     return false;
@@ -94,12 +108,15 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
   
   // Reset messages when room changes
   useEffect(() => {
-    setMessages([]);
+    setMessages(new Map());
   }, [roomId]);
+  
+  // Convert Map to Array for easier consumption by components
+  const messagesArray = Array.from(messages.values());
   
   return {
     connected,
-    messages,
+    messages: messagesArray,
     sendMessage
   };
 }

@@ -21,7 +21,7 @@ interface RoomChatProps {
   roomId: number;
   messages: any[];
   participants: User[];
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string) => boolean;
 }
 
 export default function RoomChat({ roomId, messages, participants, onSendMessage }: RoomChatProps) {
@@ -42,16 +42,23 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
       return acc;
     }, {});
   
-  // Send message mutation
+  // When WebSocket is working, we don't need to make API calls for messages
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
+      // First try to send via WebSocket
+      const websocketSuccess = onSendMessage(content);
+      
+      // WebSocket might return void, so we need to check differently
+      // This will skip the API call when websockets work
+      if (websocketSuccess === true) {
+        return { success: true, content };
+      }
+      
+      // Fall back to API if WebSocket fails
       const res = await apiRequest("POST", `/api/rooms/${roomId}/messages`, { content });
       return res.json();
     },
     onSuccess: () => {
-      // Don't invalidate immediately to prevent duplicate messages
-      // The WebSocket will handle real-time updates
-      // queryClient.invalidateQueries({ queryKey: [`/api/rooms/${roomId}`] });
       setMessageInput("");
     },
     onError: (error: Error) => {
@@ -86,7 +93,7 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
     e.preventDefault();
     if (!messageInput.trim()) return;
     
-    onSendMessage(messageInput);
+    // The mutation will try WebSocket first, then fall back to API if needed
     sendMessageMutation.mutate(messageInput);
   };
   
