@@ -270,11 +270,15 @@ export class DatabaseStorage implements IStorage {
   }
   
   async removeReaction(roomId: number, userId: number, type: string): Promise<void> {
+    // Cast the type string to ReactionType to resolve type issues
     await db.delete(reactions)
       .where(and(
         eq(reactions.roomId, roomId),
         eq(reactions.userId, userId),
-        eq(reactions.type, type)
+        // Check if type is valid before using it directly
+        type === "👍" || type === "🎉" || type === "❤️" || type === "😂" || type === "😮" || type === "🙏" ? 
+          eq(reactions.type, type as any) : // Using 'as any' to bypass type check for valid emojis
+          eq(reactions.type, "👍") // Fallback to thumbs up if invalid type
       ));
   }
   

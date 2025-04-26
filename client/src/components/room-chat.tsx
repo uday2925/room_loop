@@ -31,14 +31,23 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
+  // Extract reactions from all messages
+  // This handles both message and reaction WebSocket events
+  const allReactions = messages
+    .filter(message => message.type === 'reaction' || message.reaction)
+    .map(message => message.reaction || message)
+    .filter(Boolean);
+    
   // Group reactions by type for display
-  const groupedReactions = messages
-    .filter(message => message.type === 'reaction')
+  const groupedReactions = allReactions
     .reduce((acc: Record<string, number>, reaction: any) => {
-      if (!acc[reaction.type]) {
-        acc[reaction.type] = 0;
+      const reactionType = reaction.type;
+      if (!reactionType) return acc;
+      
+      if (!acc[reactionType]) {
+        acc[reactionType] = 0;
       }
-      acc[reaction.type]++;
+      acc[reactionType]++;
       return acc;
     }, {});
   
@@ -70,13 +79,28 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
     },
   });
   
-  // Send reaction mutation
+  // Send reaction mutation - similar to message, try WebSocket first
   const sendReactionMutation = useMutation({
     mutationFn: async (type: ReactionType) => {
+      // Try to send reaction via WebSocket first
+      // We can use the same onSendMessage channel but with a different message type
+      const websocketSuccess = onSendMessage(JSON.stringify({
+        type: 'reaction',
+        reactionType: type
+      }));
+      
+      // If WebSocket worked, no need for API call
+      if (websocketSuccess === true) {
+        return { success: true, type };
+      }
+      
+      // Fall back to API if WebSocket fails
       const res = await apiRequest("POST", `/api/rooms/${roomId}/reactions`, { type });
       return res.json();
     },
     onSuccess: () => {
+      // We don't need to invalidate queries if using WebSockets since we'll get real-time updates
+      // But keep this as a fallback if WebSockets aren't working
       queryClient.invalidateQueries({ queryKey: [`/api/rooms/${roomId}`] });
     },
     onError: (error: Error) => {
