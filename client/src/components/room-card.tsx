@@ -32,7 +32,7 @@ export default function RoomCard({ room, participants }: RoomCardProps) {
         description: "You can now participate in the discussion",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/rooms"] });
-      navigate(`/room/${room.id}`);
+      navigate(`/rooms/${room.id}`);
     },
     onError: (error: Error) => {
       toast({
@@ -86,7 +86,7 @@ export default function RoomCard({ room, participants }: RoomCardProps) {
   };
   
   const handleCardClick = () => {
-    navigate(`/room/${room.id}`);
+    navigate(`/rooms/${room.id}`);
   };
   
   return (

@@ -172,47 +172,7 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
         </div>
       </ScrollArea>
       
-      {/* Reactions */}
-      <div className="flex items-center space-x-3 p-3 bg-gray-50 border-t border-gray-200">
-        {Object.entries(groupedReactions).map(([type, count]) => (
-          <Button 
-            key={type}
-            type="button" 
-            variant="outline"
-            className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-full text-gray-800 bg-gray-100 hover:bg-gray-200"
-            onClick={() => handleReaction(type as ReactionType)}
-          >
-            {type} <span className="ml-1">{count}</span>
-          </Button>
-        ))}
-        
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button 
-              type="button" 
-              variant="outline"
-              className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-full text-gray-800 bg-gray-100 hover:bg-gray-200"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-2">
-            <div className="flex gap-2 flex-wrap">
-              {REACTION_TYPES.map(type => (
-                <Button 
-                  key={type}
-                  type="button"
-                  variant="ghost"
-                  className="text-xl p-2 h-auto"
-                  onClick={() => handleReaction(type)}
-                >
-                  {type}
-                </Button>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+      {/* Reactions section removed as requested */}
       
       {/* Message input */}
       <form 

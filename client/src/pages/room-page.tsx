@@ -78,30 +78,39 @@ export default function RoomPage() {
     userId: user?.id as number
   });
   
-  // We need to deduplicate messages from the backend and WebSocket
+  // More robust message deduplication by using a composite key
   const messageMap = new Map();
+  
+  // Helper function to create a unique key for each message that accounts for content
+  const createMessageKey = (msg: any) => {
+    if (!msg) return '';
+    const id = msg.id ? String(msg.id) : '';
+    const userId = msg.userId ? String(msg.userId) : '';
+    const content = msg.content ? String(msg.content) : '';
+    // Use either ID (if exists) or a composite of userID + content for deduplication
+    return id ? id : `${userId}-${content.substring(0, 30)}`;
+  };
   
   // First add backend messages to the map
   (roomData?.messages || []).forEach(message => {
-    if (message.id) {
-      messageMap.set(message.id, message);
-    }
+    const key = createMessageKey(message);
+    if (key) messageMap.set(key, message);
   });
   
-  // Then add WebSocket messages, which will overwrite duplicates
+  // Then add WebSocket messages, but only if they're not already in the map
+  // This prevents old messages from being shown again
   (messages || []).forEach(message => {
-    if (message.id) {
-      messageMap.set(message.id, message);
-    } else {
-      // For temporary messages without an ID
-      messageMap.set(`temp-${Date.now()}`, message);
+    const key = createMessageKey(message);
+    // Only add the message if we don't have it already or if it's a new temp message
+    if (key && (!messageMap.has(key) || key.startsWith('temp-'))) {
+      messageMap.set(key, message);
     }
   });
   
-  // Convert map to sorted array
-  const allMessages = Array.from(messageMap.values()).sort((a, b) => 
-    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
+  // Convert map to sorted array and filter out any malformed messages
+  const allMessages = Array.from(messageMap.values())
+    .filter(msg => msg && msg.content && msg.createdAt) // Ensure valid messages
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   
   // Get status badge styling
   const getStatusBadge = () => {
