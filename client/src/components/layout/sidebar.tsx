@@ -76,6 +76,8 @@ export default function Sidebar({ activePage }: SidebarProps) {
             <Badge className="ml-auto bg-accent text-white">3</Badge>
           </a>
         </Link> */}
+
+        
       </nav>
       <div className="p-4 border-t border-gray-200">
         <div className="flex items-center justify-between">
