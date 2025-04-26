@@ -39,17 +39,18 @@ export default function RoomChat({
   // Completely reworked reaction handling to prevent duplication issues
   // We'll track reactions by user+type, so each user can only have one of each reaction type
   const processedReactions = new Map<string, boolean>();
-  
+
   // First pass: track unique user+reaction combinations
   messages
-    .filter(message => message.type === 'reaction')
+    .filter((message) => message.type === "reaction")
     .forEach((message: any) => {
       // Extract the emoji from various possible formats
-      const emoji = message.content || 
-                   (message.reaction && message.reaction.type) || 
-                   message.emoji || 
-                   null;
-                   
+      const emoji =
+        message.content ||
+        (message.reaction && message.reaction.type) ||
+        message.emoji ||
+        null;
+
       if (emoji && message.userId) {
         // Create a unique key for each user+reaction combination
         const key = `${message.userId}-${emoji}`;
@@ -57,21 +58,23 @@ export default function RoomChat({
         processedReactions.set(key, true);
       }
     });
-    
+
   // Now count the unique reactions by type
-  const groupedReactions = Array.from(processedReactions.keys())
-    .reduce((acc: Record<string, number>, key: string) => {
+  const groupedReactions = Array.from(processedReactions.keys()).reduce(
+    (acc: Record<string, number>, key: string) => {
       // Extract emoji from the composite key (userId-emoji)
-      const emoji = key.split('-')[1];
-      
+      const emoji = key.split("-")[1];
+
       if (!emoji) return acc;
-      
+
       if (!acc[emoji]) {
         acc[emoji] = 0;
       }
       acc[emoji]++;
       return acc;
-    }, {});
+    },
+    {},
+  );
 
   // When WebSocket is working, we don't need to make API calls for messages
   const sendMessageMutation = useMutation({
@@ -106,7 +109,7 @@ export default function RoomChat({
   // Send reaction mutation - simplified to send just the emoji
   const sendReactionMutation = useMutation({
     mutationFn: async (type: ReactionType) => {
-      // New approach: Send just the reaction emoji with a REACTION: prefix 
+      // New approach: Send just the reaction emoji with a REACTION: prefix
       // This simplifies everything and prevents JSON parsing issues
       const reactionMessage = `REACTION:${type}`;
 
@@ -154,12 +157,13 @@ export default function RoomChat({
 
   // Handle reaction click - optimistic update to prevent duplicates
   const handleReaction = (type: ReactionType) => {
+    sendMessageMutation.mutate(type);
     // Skip sending the reaction if it's in an existing mutation
-    if (sendReactionMutation.isPending) {
-      return;
-    }
-    
-    sendReactionMutation.mutate(type);
+    // if (sendReactionMutation.isPending) {
+    //   return;
+    // }
+
+    // sendReactionMutation.mutate(type);
   };
 
   // Scroll to bottom on new messages

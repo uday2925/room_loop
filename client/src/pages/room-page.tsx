@@ -265,7 +265,7 @@ export default function RoomPage() {
                 </Popover>
                 
                 {/* Invitations popover - only show for private rooms & if user is creator */}
-                {roomData?.room?.type === 'private' && roomData?.userAccess?.isCreator && (
+                {/* {roomData?.room?.type === 'private' && roomData?.userAccess?.isCreator && (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button 
@@ -325,7 +325,7 @@ export default function RoomPage() {
                       </ScrollArea>
                     </PopoverContent>
                   </Popover>
-                )}
+                )} */}
               </div>
             </div>
           )}

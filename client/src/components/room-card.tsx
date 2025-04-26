@@ -13,9 +13,10 @@ import { cn } from "@/lib/utils";
 interface RoomCardProps {
   room: Room;
   participants?: any[];
+  isInvitation?: boolean;
 }
 
-export default function RoomCard({ room, participants }: RoomCardProps) {
+export default function RoomCard({ room, participants, isInvitation = false }: RoomCardProps) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -37,6 +38,30 @@ export default function RoomCard({ room, participants }: RoomCardProps) {
     onError: (error: Error) => {
       toast({
         title: "Failed to join room",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Accept invitation mutation
+  const acceptInvitationMutation = useMutation({
+    mutationFn: async () => {
+      // Find the invitation for this room
+      const res = await apiRequest("POST", `/api/invitations/${room.id}/accept`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Invitation accepted",
+        description: "You are now a participant in this room",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/rooms"] });
+      navigate(`/room/${room.id}`);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to accept invitation",
         description: error.message,
         variant: "destructive",
       });
@@ -103,6 +128,11 @@ export default function RoomCard({ room, participants }: RoomCardProps) {
             <Badge className="capitalize bg-gray-100 text-gray-800 hover:bg-gray-100">
               {room.tag}
             </Badge>
+            {isInvitation && (
+              <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">
+                Invitation
+              </Badge>
+            )}
           </div>
           <span className="text-xs text-gray-500">{formatRoomTime()}</span>
         </div>
@@ -113,16 +143,36 @@ export default function RoomCard({ room, participants }: RoomCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex -space-x-2 overflow-hidden">
             {/* This would be populated with actual participants */}
-            <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500 border border-white">
+            {/* <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500 border border-white">
               <Avatar className="h-6 w-6">
                 <AvatarFallback className="text-xs">
                   {room.id % 5 + 1}
                 </AvatarFallback>
               </Avatar>
-            </div>
+            </div> */}
           </div>
           
-          {room.status === "live" ? (
+          {isInvitation ? (
+            <Button 
+              size="sm"
+              variant="secondary"
+              className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200"
+              onClick={(e) => {
+                e.stopPropagation();
+                acceptInvitationMutation.mutate();
+              }}
+              disabled={acceptInvitationMutation.isPending}
+            >
+              {acceptInvitationMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  Accepting...
+                </>
+              ) : (
+                "Accept Invitation"
+              )}
+            </Button>
+          ) : room.status === "live" ? (
             <Button 
               size="sm"
               onClick={(e) => {

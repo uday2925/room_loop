@@ -17,75 +17,79 @@ export default function ExplorePage() {
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTags, setSelectedTags] = useState<RoomTag[]>([]);
-  
+
   const { data: rooms, isLoading } = useQuery({
-    queryKey: ['/api/rooms'],
+    queryKey: ["/api/rooms"],
   });
-  
+
   // Filter functions
   const filterBySearch = (room: Room) => {
     if (!searchTerm) return true;
-    return room.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (room.description && room.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    return (
+      room.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (room.description &&
+        room.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
   };
-  
+
   const filterByTags = (room: Room) => {
     if (selectedTags.length === 0) return true;
     return selectedTags.includes(room.tag as RoomTag);
   };
-  
+
   // Combined filter
   const filterRoom = (room: Room) => filterBySearch(room) && filterByTags(room);
-  
+
   // Apply filters
-  const filteredPublic = rooms?.public?.filter(filterRoom) || [];
-  
+  const filteredPublic = [
+    ...(rooms?.public || []),
+    ...(rooms?.invited || []),
+  ].filter(filterRoom);
+
   // Deduplicate rooms using a Map based on room ID
   const deduplicateRooms = (rooms: any[]) => {
     const uniqueRooms = new Map();
-    rooms.forEach(room => {
+    rooms.forEach((room) => {
       if (!uniqueRooms.has(room.id)) {
         uniqueRooms.set(room.id, room);
       }
     });
     return Array.from(uniqueRooms.values());
   };
-  
+
   // Get upcoming rooms (scheduled)
   const upcomingRooms = deduplicateRooms([
-    ...(rooms?.created || []), 
-    ...(rooms?.participating || [])
-  ]).filter(room => room.status === 'scheduled');
+    ...(rooms?.created || []),
+    ...(rooms?.participating || []),
+  ]).filter((room) => room.status === "scheduled");
   const filteredUpcoming = upcomingRooms.filter(filterRoom);
-  
+
   // Get live rooms
   const liveRooms = deduplicateRooms([
-    ...(rooms?.created || []), 
-    ...(rooms?.participating || [])
-  ]).filter(room => room.status === 'live');
+    ...(rooms?.created || []),
+    ...(rooms?.participating || []),
+  ]).filter((room) => room.status === "live");
   const filteredLive = liveRooms.filter(filterRoom);
-  
+
   // Get past rooms
   const pastRooms = deduplicateRooms([
-    ...(rooms?.created || []), 
-    ...(rooms?.participating || [])
-  ]).filter(room => room.status === 'closed');
+    ...(rooms?.created || []),
+    ...(rooms?.participating || []),
+  ]).filter((room) => room.status === "closed");
   const filteredPast = pastRooms.filter(filterRoom);
-  
+
   // Toggle tag selection
   const toggleTag = (tag: RoomTag) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) 
-        ? prev.filter(t => t !== tag) 
-        : [...prev, tag]
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
   };
-  
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar (desktop only) */}
       <Sidebar activePage="explore" />
-      
+
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Nav */}
@@ -95,18 +99,22 @@ export default function ExplorePage() {
               <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold">
                 R
               </div>
-              <span className="ml-2 text-lg font-bold text-gray-900">RoomLoop</span>
+              <span className="ml-2 text-lg font-bold text-gray-900">
+                RoomLoop
+              </span>
             </div>
             <button className="p-1 rounded-md text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary">
               <Search className="h-6 w-6" />
             </button>
           </div>
           <div className="hidden md:flex items-center justify-between px-6 py-3">
-            <h1 className="text-xl font-semibold text-gray-900">Explore Rooms</h1>
+            <h1 className="text-xl font-semibold text-gray-900">
+              Explore Rooms
+            </h1>
             <div className="flex items-center">
-              <Button 
+              <Button
                 onClick={() => setCreateRoomOpen(true)}
-                variant="default" 
+                variant="default"
                 className="ml-4 flex items-center"
               >
                 <Plus className="h-5 w-5 mr-1" />
@@ -127,7 +135,10 @@ export default function ExplorePage() {
               {/* Search and Filter Section */}
               <div className="mb-6 bg-white p-4 rounded-xl shadow-sm">
                 <div className="relative mb-4">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <Search
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    size={18}
+                  />
                   <Input
                     className="pl-10"
                     placeholder="Search rooms by title or description"
@@ -135,13 +146,17 @@ export default function ExplorePage() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                
+
                 <div className="flex flex-wrap gap-2">
-                  <span className="text-sm font-medium text-gray-700 mr-2 mt-1">Filter by tag:</span>
+                  <span className="text-sm font-medium text-gray-700 mr-2 mt-1">
+                    Filter by tag:
+                  </span>
                   {ROOM_TAGS.map((tag) => (
-                    <Badge 
+                    <Badge
                       key={tag}
-                      variant={selectedTags.includes(tag) ? "default" : "outline"}
+                      variant={
+                        selectedTags.includes(tag) ? "default" : "outline"
+                      }
                       className="cursor-pointer capitalize"
                       onClick={() => toggleTag(tag as RoomTag)}
                     >
@@ -150,7 +165,7 @@ export default function ExplorePage() {
                   ))}
                 </div>
               </div>
-              
+
               {/* Tabs for Different Room Categories */}
               <Tabs defaultValue="all">
                 <TabsList className="mb-6">
@@ -159,12 +174,14 @@ export default function ExplorePage() {
                   <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
                   <TabsTrigger value="past">Past</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="all">
                   {/* Public Rooms */}
                   {filteredPublic.length > 0 && (
                     <div className="mb-8">
-                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Public Rooms</h2>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                        Public Rooms
+                      </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredPublic.map((room: Room) => (
                           <RoomCard key={`public-${room.id}`} room={room} />
@@ -172,11 +189,13 @@ export default function ExplorePage() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Live Rooms */}
                   {filteredLive.length > 0 && (
                     <div className="mb-8">
-                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Live Now</h2>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                        Live Now
+                      </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredLive.map((room: Room) => (
                           <RoomCard key={`live-${room.id}`} room={room} />
@@ -184,11 +203,13 @@ export default function ExplorePage() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Upcoming Rooms */}
                   {filteredUpcoming.length > 0 && (
                     <div className="mb-8">
-                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Rooms</h2>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                        Upcoming Rooms
+                      </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredUpcoming.map((room: Room) => (
                           <RoomCard key={`upcoming-${room.id}`} room={room} />
@@ -196,20 +217,30 @@ export default function ExplorePage() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* No Rooms Found */}
-                  {filteredPublic.length === 0 && filteredLive.length === 0 && filteredUpcoming.length === 0 && (
-                    <div className="text-center py-12">
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No rooms match your search</h3>
-                      <p className="text-gray-500 mb-6">Try adjusting your search or filters</p>
-                      <Button onClick={() => {
-                        setSearchTerm("");
-                        setSelectedTags([]);
-                      }}>Clear Filters</Button>
-                    </div>
-                  )}
+                  {filteredPublic.length === 0 &&
+                    filteredLive.length === 0 &&
+                    filteredUpcoming.length === 0 && (
+                      <div className="text-center py-12">
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                          No rooms match your search
+                        </h3>
+                        <p className="text-gray-500 mb-6">
+                          Try adjusting your search or filters
+                        </p>
+                        <Button
+                          onClick={() => {
+                            setSearchTerm("");
+                            setSelectedTags([]);
+                          }}
+                        >
+                          Clear Filters
+                        </Button>
+                      </div>
+                    )}
                 </TabsContent>
-                
+
                 <TabsContent value="live">
                   {filteredLive.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -219,13 +250,19 @@ export default function ExplorePage() {
                     </div>
                   ) : (
                     <div className="text-center py-12">
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No live rooms at the moment</h3>
-                      <p className="text-gray-500 mb-6">Check back later or create your own room</p>
-                      <Button onClick={() => setCreateRoomOpen(true)}>Create Room</Button>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        No live rooms at the moment
+                      </h3>
+                      <p className="text-gray-500 mb-6">
+                        Check back later or create your own room
+                      </p>
+                      <Button onClick={() => setCreateRoomOpen(true)}>
+                        Create Room
+                      </Button>
                     </div>
                   )}
                 </TabsContent>
-                
+
                 <TabsContent value="upcoming">
                   {filteredUpcoming.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -235,13 +272,19 @@ export default function ExplorePage() {
                     </div>
                   ) : (
                     <div className="text-center py-12">
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming rooms scheduled</h3>
-                      <p className="text-gray-500 mb-6">Create a new room to schedule a meetup</p>
-                      <Button onClick={() => setCreateRoomOpen(true)}>Schedule a Room</Button>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        No upcoming rooms scheduled
+                      </h3>
+                      <p className="text-gray-500 mb-6">
+                        Create a new room to schedule a meetup
+                      </p>
+                      <Button onClick={() => setCreateRoomOpen(true)}>
+                        Schedule a Room
+                      </Button>
                     </div>
                   )}
                 </TabsContent>
-                
+
                 <TabsContent value="past">
                   {filteredPast.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -251,8 +294,12 @@ export default function ExplorePage() {
                     </div>
                   ) : (
                     <div className="text-center py-12">
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No past rooms</h3>
-                      <p className="text-gray-500">Join or create rooms to see your history</p>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        No past rooms
+                      </h3>
+                      <p className="text-gray-500">
+                        Join or create rooms to see your history
+                      </p>
                     </div>
                   )}
                 </TabsContent>
@@ -261,12 +308,15 @@ export default function ExplorePage() {
           )}
         </main>
       </div>
-      
+
       {/* Bottom Navigation (mobile only) */}
       <MobileNav activePage="explore" />
-      
+
       {/* Create Room Dialog */}
-      <CreateRoomDialog open={createRoomOpen} onOpenChange={setCreateRoomOpen} />
+      <CreateRoomDialog
+        open={createRoomOpen}
+        onOpenChange={setCreateRoomOpen}
+      />
     </div>
   );
 }

@@ -289,7 +289,7 @@ export default function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialo
                 <div className="flex space-x-2 mb-2 mt-1">
                   <Input
                     type="text"
-                    placeholder="Username or email"
+                    placeholder="Username"
                     value={inviteInput}
                     onChange={(e) => setInviteInput(e.target.value)}
                     onKeyDown={(e) => {

@@ -235,7 +235,7 @@ export default function AuthPage() {
         </div>
         
         {/* Hero Section */}
-        <div className="hidden md:flex w-1/2 bg-gradient-to-r from-primary-600 to-primary-800 text-white p-8 items-center justify-center">
+        <div className="hidden md:flex w-1/2 bg-primary text-white p-8 items-center justify-center">
           <div className="max-w-lg">
             <h1 className="text-4xl font-bold mb-6">Create and join virtual meetups on the fly</h1>
             <ul className="space-y-4">

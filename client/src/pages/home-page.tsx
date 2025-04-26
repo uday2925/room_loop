@@ -22,6 +22,7 @@ export default function HomePage() {
   const scheduledRooms = rooms?.participating?.filter((room: Room) => room.status === 'scheduled') || [];
   const pastRooms = rooms?.participating?.filter((room: Room) => room.status === 'closed') || [];
   const publicRooms = rooms?.public || [];
+  const invitedRooms = rooms?.invited || []; // Add invited rooms
   
   return (
     <div className="flex h-screen overflow-hidden">
@@ -129,6 +130,22 @@ export default function HomePage() {
                   )}
                 </div>
               </div>
+
+              {/* Room Invitations Section */}
+              {invitedRooms.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-gray-900">Room Invitations</h2>
+                    <a href="/explore" className="text-primary hover:text-primary-800 text-sm font-medium">View all</a>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {invitedRooms.map((room: Room) => (
+                      <RoomCard key={`invited-${room.id}`} room={room} isInvitation={true} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Public Rooms Section */}
               {publicRooms.length > 0 && (

@@ -7,6 +7,10 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 
+import * as dotenv from "dotenv";
+
+dotenv.config(); 
+
 declare global {
   namespace Express {
     interface User extends SelectUser {}
