@@ -52,34 +52,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Handle messages
         if (data.type === 'message' && userData) {
-          // Save message to database
-          const message = await storage.createMessage({
-            roomId: userData.roomId,
-            userId: userData.userId,
-            content: data.content
-          });
+          try {
+            // If client already sent message content as part of the message object, use it
+            // This helps prevent duplicate messages and reduces API calls
+            let message;
+            
+            // Extract message details from the message data
+            if (data.message && data.message.content) {
+              // Use existing message data for immediate broadcast
+              const tempMessage = {
+                id: null, // Will be replaced with actual ID after DB save
+                roomId: userData.roomId,
+                userId: userData.userId, 
+                content: data.message.content,
+                createdAt: data.message.createdAt || new Date().toISOString()
+              };
+              
+              // Save message to database in background
+              storage.createMessage({
+                roomId: userData.roomId,
+                userId: userData.userId,
+                content: data.message.content
+              }).then(savedMessage => {
+                // Once saved, broadcast the message with ID to all clients
+                // This allows clients to deduplicate properly using the DB ID
+                const roomClients = roomConnections.get(userData.roomId) || new Set();
+                const updateMessage = JSON.stringify({
+                  type: 'message',
+                  message: {
+                    ...savedMessage,
+                    user: { 
+                      id: userData.userId,
+                      username: data.username || 'User' 
+                    }
+                  }
+                });
+                
+                roomClients.forEach(client => {
+                  if (client.readyState === WebSocket.OPEN) {
+                    client.send(updateMessage);
+                  }
+                });
+              }).catch(error => {
+                console.error('Error saving message:', error);
+              });
+              
+              // Use temporary message for immediate feedback
+              message = tempMessage;
+            } else {
+              // Traditional flow - save to DB first
+              message = await storage.createMessage({
+                roomId: userData.roomId,
+                userId: userData.userId,
+                content: data.content
+              });
+            }
           
-          // Get user information
-          const user = await storage.getUser(userData.userId);
-          
-          // Broadcast to all clients in the room
-          const roomClients = roomConnections.get(userData.roomId) || new Set();
-          const outMessage = JSON.stringify({
-            type: 'message',
-            message: {
-              ...message,
-              user: { 
-                id: user?.id,
-                username: user?.username 
+            // Get user information
+            const user = await storage.getUser(userData.userId);
+            
+            // Broadcast to all clients in the room
+            const roomClients = roomConnections.get(userData.roomId) || new Set();
+            const outMessage = JSON.stringify({
+              type: 'message',
+              message: {
+                ...message,
+                user: { 
+                  id: user?.id,
+                  username: user?.username 
+                }
               }
-            }
-          });
-          
-          roomClients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN) {
-              client.send(outMessage);
-            }
-          });
+            });
+            
+            roomClients.forEach(client => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(outMessage);
+              }
+            });
+          } catch (error) {
+            console.error('Error handling WebSocket message:', error);
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Failed to process message'
+            }));
+          }
         }
         
         // Handle reactions

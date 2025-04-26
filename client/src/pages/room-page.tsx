@@ -419,10 +419,20 @@ export default function RoomPage() {
                     roomId={roomId as number}
                     messages={allMessages}
                     participants={roomData.participants}
-                    onSendMessage={(content) => {
-                      sendMessage({
+                    onSendMessage={(content): boolean => {
+                      const now = new Date().toISOString();
+                      return sendMessage({
                         type: 'message',
-                        content
+                        content,
+                        roomId,
+                        userId: user?.id,
+                        createdAt: now,
+                        message: {
+                          content,
+                          roomId,
+                          userId: user?.id,
+                          createdAt: now
+                        }
                       });
                     }}
                   />
