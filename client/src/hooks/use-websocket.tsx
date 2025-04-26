@@ -58,30 +58,36 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
       try {
         const data = JSON.parse(event.data);
         
-        // Generate a unique key for deduplication
-        // Use message ID + type as the key to detect duplicates
-        const messageKey = data.type === 'message' && data.message ? 
-          `${data.message.id || 'temp'}-${data.message.content}-${data.message.userId}` : null;
+        // Generate a unique key for deduplication based on message type
+        let messageKey = null;
         
-        // Skip if we've already processed this exact message
+        if (data.type === 'message' && data.message) {
+          // For regular messages, use ID + content + userId as the key
+          messageKey = `${data.message.id || 'temp'}-${data.message.content}-${data.message.userId}`;
+        } else if (data.type === 'reaction' && data.reaction) {
+          // For reactions, use ID + type + userId as the key
+          messageKey = `reaction-${data.reaction.id || 'temp'}-${data.reaction.type}-${data.reaction.userId}`;
+        }
+        
+        // Skip if we've already processed this exact message/reaction
         if (messageKey && processedMessagesRef.current.has(messageKey)) {
           return;
+        }
+        
+        // Add to processed messages to avoid duplicates
+        if (messageKey) {
+          processedMessagesRef.current.add(messageKey);
+          
+          // Limit the size of the processed messages set to avoid memory leaks
+          if (processedMessagesRef.current.size > 1000) {
+            const entries = Array.from(processedMessagesRef.current);
+            processedMessagesRef.current = new Set(entries.slice(-500)); // Keep the most recent 500
+          }
         }
         
         // Handle different message types
         if (data.type === 'message' && data.message) {
           const message = data.message;
-          
-          // Track this message as processed to avoid duplicates
-          if (messageKey) {
-            processedMessagesRef.current.add(messageKey);
-            
-            // Limit the size of the processed messages set to avoid memory leaks
-            if (processedMessagesRef.current.size > 1000) {
-              const entries = Array.from(processedMessagesRef.current);
-              processedMessagesRef.current = new Set(entries.slice(-500)); // Keep the most recent 500
-            }
-          }
           
           setMessages(prev => {
             // Use Map to deduplicate messages by ID
@@ -93,6 +99,26 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
               const tempKey = `temp-${Date.now()}-${message.content.substring(0, 20)}`;
               newMap.set(tempKey, message);
             }
+            return newMap;
+          });
+        } else if (data.type === 'reaction' && data.reaction) {
+          const reaction = data.reaction;
+          
+          setMessages(prev => {
+            // Use Map to deduplicate reactions by ID
+            const newMap = new Map(prev);
+            const reactionKey = reaction.id ? 
+              `reaction-${reaction.id}` : 
+              `reaction-temp-${Date.now()}-${reaction.type}-${reaction.userId}`;
+            
+            newMap.set(reactionKey, { 
+              type: 'reaction', 
+              reaction, 
+              id: reactionKey,
+              // We need a timestamp for sorting
+              createdAt: reaction.createdAt || new Date().toISOString()
+            });
+            
             return newMap;
           });
         } else if (data.type === 'error') {
