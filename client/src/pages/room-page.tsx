@@ -151,13 +151,18 @@ export default function RoomPage() {
     }
   };
   
-  // Check for active status every minute
+  // Check for room status updates more frequently (every 10 seconds) 
+  // This ensures users can join as soon as a room becomes live
   useEffect(() => {
     if (!roomData?.room) return;
     
+    // Check more frequently for scheduled rooms that are about to go live
+    const isScheduled = roomData.room.status === 'scheduled';
+    const checkInterval = isScheduled ? 10 * 1000 : 60 * 1000;
+    
     const interval = setInterval(() => {
       refetch();
-    }, 60 * 1000);
+    }, checkInterval);
     
     return () => clearInterval(interval);
   }, [roomData, refetch]);

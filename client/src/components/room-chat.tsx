@@ -93,8 +93,13 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
     e.preventDefault();
     if (!messageInput.trim()) return;
     
-    // The mutation will try WebSocket first, then fall back to API if needed
+    // We need to avoid sending the message twice
+    // The mutationFn will try WebSocket, then fall back to API if needed
+    // No need to call onSendMessage directly here
     sendMessageMutation.mutate(messageInput);
+    
+    // Clear input immediately for better UX
+    setMessageInput("");
   };
   
   // Handle reaction click

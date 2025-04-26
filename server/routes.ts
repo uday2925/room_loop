@@ -76,6 +76,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }).then(savedMessage => {
                 // Once saved, broadcast the message with ID to all clients
                 // This allows clients to deduplicate properly using the DB ID
+                // But don't send to original sender to avoid duplicates
                 const roomClients = roomConnections.get(userData.roomId) || new Set();
                 const updateMessage = JSON.stringify({
                   type: 'message',
@@ -89,7 +90,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 });
                 
                 roomClients.forEach(client => {
-                  if (client.readyState === WebSocket.OPEN) {
+                  // Skip sending back to the original sender to avoid duplicate messages
+                  if (client !== ws && client.readyState === WebSocket.OPEN) {
                     client.send(updateMessage);
                   }
                 });
@@ -111,8 +113,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Get user information
             const user = await storage.getUser(userData.userId);
             
-            // Broadcast to all clients in the room
-            const roomClients = roomConnections.get(userData.roomId) || new Set();
+            // For the initial message, we only send it to the sender for immediate feedback
+            // This avoids duplicate messages for other clients who will get the message from the DB save callback
             const outMessage = JSON.stringify({
               type: 'message',
               message: {
@@ -124,11 +126,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             });
             
-            roomClients.forEach(client => {
-              if (client.readyState === WebSocket.OPEN) {
-                client.send(outMessage);
-              }
-            });
+            // Only send the initial confirmation back to the sender
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(outMessage);
+            }
           } catch (error) {
             console.error('Error handling WebSocket message:', error);
             ws.send(JSON.stringify({
