@@ -31,23 +31,24 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
-  // Extract reactions from all messages
-  // This handles both message and reaction WebSocket events
-  const allReactions = messages
-    .filter(message => message.type === 'reaction' || message.reaction)
-    .map(message => message.reaction || message)
-    .filter(Boolean);
-    
-  // Group reactions by type for display
-  const groupedReactions = allReactions
-    .reduce((acc: Record<string, number>, reaction: any) => {
-      const reactionType = reaction.type;
-      if (!reactionType) return acc;
+  // New simplified reaction handling
+  // Group reactions by emoji type for display
+  const groupedReactions = messages
+    .filter(message => message.type === 'reaction')
+    .reduce((acc: Record<string, number>, message: any) => {
+      // Get the emoji from the content field in the new format
+      // or fallback to reaction.type for backwards compatibility
+      const emoji = message.content || 
+                   (message.reaction && message.reaction.type) || 
+                   message.emoji || 
+                   null;
+                   
+      if (!emoji) return acc;
       
-      if (!acc[reactionType]) {
-        acc[reactionType] = 0;
+      if (!acc[emoji]) {
+        acc[emoji] = 0;
       }
-      acc[reactionType]++;
+      acc[emoji]++;
       return acc;
     }, {});
   
@@ -79,19 +80,15 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
     },
   });
   
-  // Send reaction mutation - similar to message, try WebSocket first
+  // Send reaction mutation - simplified to send just the emoji
   const sendReactionMutation = useMutation({
     mutationFn: async (type: ReactionType) => {
-      // Create a simple reaction message for WebSocket
-      // USE STRING FORMAT instead of object to avoid parsing issues
-      const reactionData = JSON.stringify({
-        type: 'reaction',
-        reactionType: type,
-        userId: user?.id
-      });
+      // New approach: Send just the reaction emoji directly as a special message type
+      // This simplifies everything and prevents JSON parsing issues
+      const reactionMessage = `REACTION:${type}`;
       
-      // Try to send reaction via WebSocket first with stringified content
-      const websocketSuccess = onSendMessage(reactionData);
+      // Send the simplified reaction format
+      const websocketSuccess = onSendMessage(reactionMessage);
       
       // If WebSocket worked, no need for API call
       if (websocketSuccess === true) {

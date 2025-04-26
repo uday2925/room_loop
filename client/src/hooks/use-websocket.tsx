@@ -149,26 +149,52 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
             }
             return newMap;
           });
-        } else if (data.type === 'reaction' && data.reaction) {
-          const reaction = data.reaction;
-          
-          setMessages(prev => {
-            // Use Map to deduplicate reactions by ID
-            const newMap = new Map(prev);
-            const reactionKey = reaction.id ? 
-              `reaction-${reaction.id}` : 
-              `reaction-temp-${Date.now()}-${reaction.type}-${reaction.userId}`;
+        } else if (data.type === 'reaction') {
+          // Handle the simplified reaction format (just emoji)
+          if (data.emoji) {
+            console.log("Received simplified reaction:", data.emoji);
             
-            newMap.set(reactionKey, { 
-              type: 'reaction', 
-              reaction, 
-              id: reactionKey,
-              // We need a timestamp for sorting
-              createdAt: reaction.createdAt || new Date().toISOString()
+            // Create a unique key for this reaction
+            const reactionKey = `reaction-${Date.now()}-${data.emoji}-${data.userId}`;
+            
+            setMessages(prev => {
+              const newMap = new Map(prev);
+              
+              // Create a simplified reaction object
+              newMap.set(reactionKey, { 
+                type: 'reaction',
+                id: reactionKey,
+                content: data.emoji, // Store the emoji directly in content
+                userId: data.userId,
+                username: data.username,
+                createdAt: data.timestamp || new Date().toISOString()
+              });
+              
+              return newMap;
             });
+          } 
+          // Legacy handling for the old complex reaction format
+          else if (data.reaction) {
+            console.log("Received legacy complex reaction:", data.reaction);
+            const reaction = data.reaction;
             
-            return newMap;
-          });
+            setMessages(prev => {
+              const newMap = new Map(prev);
+              const reactionKey = reaction.id ? 
+                `reaction-${reaction.id}` : 
+                `reaction-temp-${Date.now()}-${reaction.type}-${reaction.userId}`;
+              
+              newMap.set(reactionKey, { 
+                type: 'reaction', 
+                content: reaction.type, // Store the emoji in content
+                userId: reaction.userId,
+                id: reactionKey,
+                createdAt: reaction.createdAt || new Date().toISOString()
+              });
+              
+              return newMap;
+            });
+          }
         } else if (data.type === 'error') {
           toast({
             title: "WebSocket Error",

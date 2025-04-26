@@ -151,52 +151,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Handle reactions - completely rewritten for different message formats
-        if (data.type === 'reaction' && userData) {
+        // Handle simplified reaction format (new format)
+        // New format is a plain string: "REACTION:👍"
+        if (data.content && typeof data.content === 'string' && data.content.startsWith('REACTION:') && userData) {
           try {
-            // Log full reaction data for debugging
-            console.log('Raw reaction data received:', JSON.stringify(data, null, 2));
-            
-            // Initialize reactionType as null
-            let reactionType = null;
-            
-            // Handle all possible reaction formats:
-            // Format 1: { type: 'reaction', reactionType: '👍' }
-            if (typeof data.reactionType === 'string') {
-              reactionType = data.reactionType;
-              console.log('Format 1 reaction:', reactionType);
-            } 
-            // Format 2: Stringified JSON in content
-            else if (data.content && typeof data.content === 'string') {
-              try {
-                // Try to parse if it's JSON 
-                if (data.content.startsWith('{') && data.content.endsWith('}')) {
-                  const parsedContent = JSON.parse(data.content);
-                  console.log('Parsed content:', parsedContent);
-                  
-                  if (parsedContent && parsedContent.reactionType) {
-                    reactionType = parsedContent.reactionType;
-                    console.log('Format 2 reaction from JSON content:', reactionType);
-                  }
-                }
-              } catch (e) {
-                console.error('Error parsing content as JSON:', e);
-              }
-            }
-            
-            // If we still don't have a reaction type, check for nested reaction object
-            if (!reactionType && data.reaction && typeof data.reaction === 'object') {
-              if (typeof data.reaction.type === 'string') {
-                reactionType = data.reaction.type;
-                console.log('Format 3 reaction from nested object:', reactionType);
-              }
-            }
-            
-            // Final sanity check for valid emoji reaction
-            if (!reactionType) {
-              console.error('Could not find valid reaction type in message');
-              throw new Error('Invalid reaction format: missing or invalid reactionType');
-            }
+            // Extract the emoji from the message content
+            const reactionType = data.content.split('REACTION:')[1];
+            console.log(`New format reaction received: ${reactionType} from user ${userData.userId}`);
             
             // Validate that the reaction is one of the allowed types
             const validReactions = ['👍', '🎉', '❤️', '😂', '😮', '🙏'];
@@ -204,8 +165,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.error('Invalid reaction type:', reactionType);
               throw new Error(`Invalid reaction type: ${reactionType}`);
             }
-            
-            console.log(`Valid reaction ${reactionType} from user ${userData.userId} in room ${userData.roomId}`);
             
             // Get user info for richer context
             const user = await storage.getUser(userData.userId);
@@ -217,29 +176,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
               type: reactionType
             });
             
-            // Create a properly formatted reaction message
-            const outMessage = JSON.stringify({
-              type: 'reaction',
-              reaction: {
-                id: reaction.id,
-                roomId: reaction.roomId,
-                userId: reaction.userId,
-                type: reaction.type,
-                createdAt: reaction.createdAt,
-                user: {
-                  id: user?.id,
-                  username: user?.username
-                }
-              }
-            });
+            // Get room connections
+            const roomClients = roomConnections.get(userData.roomId) || new Set();
             
+            // Send ONLY the emoji as the reaction, not a complex object
+            // This simplifies client-side handling and prevents duplicate/nested reactions
             roomClients.forEach(client => {
               if (client.readyState === WebSocket.OPEN) {
-                client.send(outMessage);
+                // Send the simple reaction format that's easier to process
+                client.send(JSON.stringify({
+                  type: 'reaction',
+                  emoji: reaction.type,  // Just the emoji
+                  userId: reaction.userId,
+                  username: user?.username,
+                  timestamp: reaction.createdAt
+                }));
               }
             });
           } catch (error) {
             console.error('Error processing reaction:', error);
+            ws.send(JSON.stringify({ 
+              type: 'error', 
+              message: 'Failed to process reaction: ' + (error instanceof Error ? error.message : 'Unknown error')
+            }));
+          }
+        }
+        
+        // Legacy reaction format support (keeping for compatibility)
+        else if (data.type === 'reaction' && userData) {
+          try {
+            console.log('Legacy reaction format received:', JSON.stringify(data, null, 2));
+            
+            // Initialize reactionType as null
+            let reactionType = null;
+            
+            // Get reactionType from different possible formats
+            if (typeof data.reactionType === 'string') {
+              reactionType = data.reactionType;
+            } else if (data.reaction && typeof data.reaction.type === 'string') {
+              reactionType = data.reaction.type;
+            }
+            
+            // Check if we found a valid reaction type
+            if (!reactionType) {
+              throw new Error('Invalid reaction format: missing reactionType');
+            }
+            
+            // Validate reaction type
+            const validReactions = ['👍', '🎉', '❤️', '😂', '😮', '🙏'];
+            if (!validReactions.includes(reactionType)) {
+              throw new Error(`Invalid reaction type: ${reactionType}`);
+            }
+            
+            // Get user info
+            const user = await storage.getUser(userData.userId);
+            
+            // Create the reaction in database
+            const reaction = await storage.createReaction({
+              roomId: userData.roomId,
+              userId: userData.userId,
+              type: reactionType
+            });
+            
+            // Get room connections
+            const roomClients = roomConnections.get(userData.roomId) || new Set();
+            
+            // Send the simplified format even for legacy reactions
+            roomClients.forEach(client => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'reaction',
+                  emoji: reaction.type,  // Just the emoji
+                  userId: reaction.userId,
+                  username: user?.username,
+                  timestamp: reaction.createdAt
+                }));
+              }
+            });
+          } catch (error) {
+            console.error('Error processing legacy reaction:', error);
             ws.send(JSON.stringify({ 
               type: 'error', 
               message: 'Failed to process reaction: ' + (error instanceof Error ? error.message : 'Unknown error')
