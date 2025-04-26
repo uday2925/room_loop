@@ -1,13 +1,19 @@
 import { useState, useRef, useEffect } from "react";
-import { User, Message } from "@shared/schema";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { User, Message, REACTION_TYPES, ReactionType } from "@shared/schema";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Plus, Loader2 } from "lucide-react";
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger 
+} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -25,7 +31,16 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
-  // Removed reactions functionality as requested
+  // Group reactions by type for display
+  const groupedReactions = messages
+    .filter(message => message.type === 'reaction')
+    .reduce((acc: Record<string, number>, reaction: any) => {
+      if (!acc[reaction.type]) {
+        acc[reaction.type] = 0;
+      }
+      acc[reaction.type]++;
+      return acc;
+    }, {});
   
   // When WebSocket is working, we don't need to make API calls for messages
   const sendMessageMutation = useMutation({
@@ -55,7 +70,23 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
     },
   });
   
-  // Reaction mutation removed as requested
+  // Send reaction mutation
+  const sendReactionMutation = useMutation({
+    mutationFn: async (type: ReactionType) => {
+      const res = await apiRequest("POST", `/api/rooms/${roomId}/reactions`, { type });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/rooms/${roomId}`] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to add reaction",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
   
   // Handle message submit
   const handleSubmit = (e: React.FormEvent) => {
@@ -71,7 +102,10 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
     setMessageInput("");
   };
   
-  // Reaction handling removed as requested
+  // Handle reaction click
+  const handleReaction = (type: ReactionType) => {
+    sendReactionMutation.mutate(type);
+  };
   
   // Scroll to bottom on new messages
   useEffect(() => {

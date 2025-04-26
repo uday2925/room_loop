@@ -18,7 +18,6 @@ type MessageKey = number | string;
 export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState<Map<MessageKey, any>>(new Map());
-  const [roomStatus, setRoomStatus] = useState<string | null>(null);
   const [autoReconnect, setAutoReconnect] = useState(true);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -96,25 +95,6 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
             }
             return newMap;
           });
-        } else if (data.type === 'status_update' && data.status) {
-          // Handle room status updates
-          console.log('Received room status update:', data);
-          setRoomStatus(data.status);
-          
-          // Force refresh queries to update UI
-          try {
-            // Access query client from import
-            import('@/lib/queryClient').then(({ queryClient }) => {
-              queryClient.invalidateQueries({ queryKey: ['/api/rooms'] });
-              if (data.roomId) {
-                queryClient.invalidateQueries({ queryKey: [`/api/rooms/${data.roomId}`] });
-              }
-            }).catch(err => {
-              console.error('Error importing queryClient:', err);
-            });
-          } catch (err) {
-            console.error('Error refreshing room data:', err);
-          }
         } else if (data.type === 'error') {
           toast({
             title: "WebSocket Error",
@@ -203,7 +183,6 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
   return {
     connected,
     messages: messagesArray,
-    roomStatus,
     sendMessage
   };
 }
