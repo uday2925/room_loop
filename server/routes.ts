@@ -315,7 +315,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       const isParticipant = await storage.isRoomParticipant(roomId, userId);
       if (isParticipant) {
-        return res.status(400).json({ message: 'You are already a participant in this room' });
+        // If user is already a participant, silently succeed instead of returning an error
+        return res.status(200).json({ message: 'Already a participant in this room' });
       }
       
       // Check room type and permission

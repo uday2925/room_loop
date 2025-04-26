@@ -47,11 +47,19 @@ export default function RoomPage() {
       const res = await apiRequest("POST", `/api/rooms/${roomId}/join`);
       return res.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Room joined successfully",
-        description: "You can now participate in the discussion",
-      });
+    onSuccess: (data) => {
+      // Handle both cases - already a participant or newly joined
+      if (data.message === "Already a participant in this room") {
+        toast({
+          title: "Rejoined room",
+          description: "You are already a participant in this room",
+        });
+      } else {
+        toast({
+          title: "Room joined successfully",
+          description: "You can now participate in the discussion",
+        });
+      }
       refetch();
     },
     onError: (error: Error) => {
