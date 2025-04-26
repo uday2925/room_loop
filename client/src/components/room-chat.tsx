@@ -15,6 +15,7 @@ import {
   PopoverTrigger 
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 interface RoomChatProps {
   roomId: number;
@@ -28,6 +29,7 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   
   // Group reactions by type for display
   const groupedReactions = messages
@@ -47,7 +49,9 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/rooms/${roomId}`] });
+      // Don't invalidate immediately to prevent duplicate messages
+      // The WebSocket will handle real-time updates
+      // queryClient.invalidateQueries({ queryKey: [`/api/rooms/${roomId}`] });
       setMessageInput("");
     },
     onError: (error: Error) => {
@@ -103,32 +107,54 @@ export default function RoomChat({ roomId, messages, participants, onSendMessage
       {/* Chat messages */}
       <ScrollArea className="flex-grow p-4">
         <div className="space-y-4">
-          {messages
-            .filter(message => message.type !== 'reaction')
-            .map((message, index) => {
-              // Find the user for this message
-              const messageUser = participants.find(p => p.id === message.userId) || { 
-                username: 'Unknown User' 
-              };
-              
-              return (
-                <div key={message.id || `temp-${index}`} className="flex items-start">
-                  <Avatar className="h-8 w-8 mr-2">
+          {/* Remove duplicates by using a Set with message IDs */}
+          {Array.from(
+            new Map(
+              messages
+                .filter(message => message.type !== 'reaction')
+                .map(message => [message.id, message])
+            ).values()
+          ).map((message, index) => {
+            // Find the user for this message
+            const messageUser = participants.find(p => p.id === message.userId) || { 
+              username: 'Unknown User' 
+            };
+            
+            // Check if this message is from the current user by comparing with the user's ID in the message
+            const isCurrentUser = window?.user?.id === message.userId;
+            
+            return (
+              <div 
+                key={message.id || `temp-${index}`} 
+                className={`flex items-start ${isCurrentUser ? 'justify-end' : ''}`}
+              >
+                {!isCurrentUser && (
+                  <Avatar className="h-8 w-8 mr-2 flex-shrink-0">
                     <AvatarFallback>{messageUser.username?.[0]?.toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <div>
-                    <div className="flex items-center">
-                      <span className="font-medium text-gray-900 text-sm">{messageUser.username}</span>
-                      <span className="ml-2 text-xs text-gray-500">
-                        {format(new Date(message.createdAt), "HH:mm")}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-sm text-gray-700">
-                      <p>{message.content}</p>
-                    </div>
+                )}
+                
+                <div className={`max-w-[75%] ${isCurrentUser ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'} rounded-lg px-4 py-2`}>
+                  <div className="flex items-center">
+                    <span className={`font-medium text-sm ${isCurrentUser ? 'text-gray-100' : 'text-gray-900'}`}>
+                      {isCurrentUser ? 'You' : messageUser.username}
+                    </span>
+                    <span className={`ml-2 text-xs ${isCurrentUser ? 'text-gray-200' : 'text-gray-500'}`}>
+                      {format(new Date(message.createdAt), "HH:mm")}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-sm break-words">
+                    <p>{message.content}</p>
                   </div>
                 </div>
-              );
+                
+                {isCurrentUser && (
+                  <Avatar className="h-8 w-8 ml-2 flex-shrink-0">
+                    <AvatarFallback>{messageUser.username?.[0]?.toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                )}
+              </div>
+            );
           })}
           <div ref={messagesEndRef} />
         </div>

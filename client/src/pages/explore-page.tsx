@@ -39,15 +39,38 @@ export default function ExplorePage() {
   
   // Apply filters
   const filteredPublic = rooms?.public?.filter(filterRoom) || [];
-  const filteredUpcoming = [...(rooms?.created || []), ...(rooms?.participating || [])]
-    .filter(room => room.status === 'scheduled')
-    .filter(filterRoom);
-  const filteredLive = [...(rooms?.created || []), ...(rooms?.participating || [])]
-    .filter(room => room.status === 'live')
-    .filter(filterRoom);
-  const filteredPast = [...(rooms?.created || []), ...(rooms?.participating || [])]
-    .filter(room => room.status === 'closed')
-    .filter(filterRoom);
+  
+  // Deduplicate rooms using a Map based on room ID
+  const deduplicateRooms = (rooms: any[]) => {
+    const uniqueRooms = new Map();
+    rooms.forEach(room => {
+      if (!uniqueRooms.has(room.id)) {
+        uniqueRooms.set(room.id, room);
+      }
+    });
+    return Array.from(uniqueRooms.values());
+  };
+  
+  // Get upcoming rooms (scheduled)
+  const upcomingRooms = deduplicateRooms([
+    ...(rooms?.created || []), 
+    ...(rooms?.participating || [])
+  ]).filter(room => room.status === 'scheduled');
+  const filteredUpcoming = upcomingRooms.filter(filterRoom);
+  
+  // Get live rooms
+  const liveRooms = deduplicateRooms([
+    ...(rooms?.created || []), 
+    ...(rooms?.participating || [])
+  ]).filter(room => room.status === 'live');
+  const filteredLive = liveRooms.filter(filterRoom);
+  
+  // Get past rooms
+  const pastRooms = deduplicateRooms([
+    ...(rooms?.created || []), 
+    ...(rooms?.participating || [])
+  ]).filter(room => room.status === 'closed');
+  const filteredPast = pastRooms.filter(filterRoom);
   
   // Toggle tag selection
   const toggleTag = (tag: RoomTag) => {

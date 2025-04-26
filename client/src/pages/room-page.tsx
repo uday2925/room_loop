@@ -5,11 +5,17 @@ import { useAuth } from "@/hooks/use-auth";
 import Sidebar from "@/components/layout/sidebar";
 import MobileNav from "@/components/layout/mobile-nav";
 import RoomChat from "@/components/room-chat";
-import { Loader2, ArrowLeft, Clock, Users } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Users, Mail, UserCheck, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
+  Popover, 
+  PopoverContent, 
+  PopoverTrigger 
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiRequest } from "@/lib/queryClient";
 import { format, isAfter, isBefore } from "date-fns";
 import { useWebSocket } from "@/hooks/use-websocket";
@@ -187,6 +193,109 @@ export default function RoomPage() {
                 <Badge className="capitalize bg-gray-100 text-gray-800 hover:bg-gray-100">
                   {roomData?.room?.type}
                 </Badge>
+                
+                {/* Participants popover */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="ml-2 text-xs flex items-center gap-1"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      View Participants
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0">
+                    <div className="p-4 border-b">
+                      <h4 className="font-medium">Room Participants</h4>
+                    </div>
+                    <ScrollArea className="h-72 p-4">
+                      {roomData?.participants?.length > 0 ? (
+                        <div className="space-y-4">
+                          {roomData.participants.map((participant) => (
+                            <div key={participant.id} className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <Avatar className="h-8 w-8 mr-2">
+                                  <AvatarFallback>{participant.username[0].toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                                <span>{participant.username}</span>
+                              </div>
+                              {participant.id === roomData.room.creatorId && (
+                                <Badge variant="outline" className="text-xs">Host</Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center text-sm text-gray-500 py-4">No participants yet</p>
+                      )}
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+                
+                {/* Invitations popover - only show for private rooms & if user is creator */}
+                {roomData?.room?.type === 'private' && roomData?.userAccess?.isCreator && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="ml-2 text-xs flex items-center gap-1"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        Invitations
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0">
+                      <div className="p-4 border-b">
+                        <h4 className="font-medium">Room Invitations</h4>
+                      </div>
+                      <ScrollArea className="h-72 p-4">
+                        {roomData?.invitations && roomData.invitations.length > 0 ? (
+                          <div className="space-y-4">
+                            {roomData.invitations.map((invitation) => (
+                              <div key={invitation.id} className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                  {invitation.userId ? (
+                                    <>
+                                      <Avatar className="h-8 w-8 mr-2">
+                                        <AvatarFallback>{invitation.user?.username?.[0]?.toUpperCase() || '?'}</AvatarFallback>
+                                      </Avatar>
+                                      <span>{invitation.user?.username || 'Unknown User'}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Avatar className="h-8 w-8 mr-2">
+                                        <AvatarFallback>@</AvatarFallback>
+                                      </Avatar>
+                                      <span>{invitation.email}</span>
+                                    </>
+                                  )}
+                                </div>
+                                <Badge variant={invitation.accepted ? "default" : "outline"} className="text-xs">
+                                  {invitation.accepted ? (
+                                    <div className="flex items-center">
+                                      <UserCheck className="w-3 h-3 mr-1" />
+                                      Joined
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center">
+                                      <UserX className="w-3 h-3 mr-1" />
+                                      Pending
+                                    </div>
+                                  )}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-center text-sm text-gray-500 py-4">No invitations sent</p>
+                        )}
+                      </ScrollArea>
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
             </div>
           )}
