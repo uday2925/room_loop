@@ -36,21 +36,36 @@ export default function RoomChat({
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  // New simplified reaction handling
-  // Group reactions by emoji type for display
-  const groupedReactions = messages
-    .filter((message) => message.type === "reaction")
-    .reduce((acc: Record<string, number>, message: any) => {
-      // Get the emoji from the content field in the new format
-      // or fallback to reaction.type for backwards compatibility
-      const emoji =
-        message.content ||
-        (message.reaction && message.reaction.type) ||
-        message.emoji ||
-        null;
-
+  // Completely reworked reaction handling to prevent duplication issues
+  // We'll track reactions by user+type, so each user can only have one of each reaction type
+  const processedReactions = new Map<string, boolean>();
+  
+  // First pass: track unique user+reaction combinations
+  messages
+    .filter(message => message.type === 'reaction')
+    .forEach((message: any) => {
+      // Extract the emoji from various possible formats
+      const emoji = message.content || 
+                   (message.reaction && message.reaction.type) || 
+                   message.emoji || 
+                   null;
+                   
+      if (emoji && message.userId) {
+        // Create a unique key for each user+reaction combination
+        const key = `${message.userId}-${emoji}`;
+        // Only record the first instance of each user's reaction type
+        processedReactions.set(key, true);
+      }
+    });
+    
+  // Now count the unique reactions by type
+  const groupedReactions = Array.from(processedReactions.keys())
+    .reduce((acc: Record<string, number>, key: string) => {
+      // Extract emoji from the composite key (userId-emoji)
+      const emoji = key.split('-')[1];
+      
       if (!emoji) return acc;
-
+      
       if (!acc[emoji]) {
         acc[emoji] = 0;
       }
@@ -91,9 +106,9 @@ export default function RoomChat({
   // Send reaction mutation - simplified to send just the emoji
   const sendReactionMutation = useMutation({
     mutationFn: async (type: ReactionType) => {
-      // New approach: Send just the reaction emoji directly as a special message type
+      // New approach: Send just the reaction emoji with a REACTION: prefix 
       // This simplifies everything and prevents JSON parsing issues
-      const reactionMessage = `${type}`;
+      const reactionMessage = `REACTION:${type}`;
 
       // Send the simplified reaction format
       const websocketSuccess = onSendMessage(reactionMessage);
