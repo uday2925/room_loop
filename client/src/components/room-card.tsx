@@ -128,11 +128,11 @@ export default function RoomCard({ room, participants, isInvitation = false }: R
             <Badge className="capitalize bg-gray-100 text-gray-800 hover:bg-gray-100">
               {room.tag}
             </Badge>
-            {isInvitation && (
+            {/* {isInvitation && (
               <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">
                 Invitation
               </Badge>
-            )}
+            )} */}
           </div>
           <span className="text-xs text-gray-500">{formatRoomTime()}</span>
         </div>
@@ -152,7 +152,7 @@ export default function RoomCard({ room, participants, isInvitation = false }: R
             </div> */}
           </div>
           
-          {isInvitation ? (
+          {false? (
             <Button 
               size="sm"
               variant="secondary"
