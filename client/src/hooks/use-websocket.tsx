@@ -61,6 +61,10 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
     
     socket.addEventListener("message", (event) => {
       try {
+        // Log raw message for debugging
+        console.log("WebSocket received:", event.data.substring(0, 100));
+        
+        // Parse the message
         const data = JSON.parse(event.data);
         
         // Generate a unique key for deduplication based on message type
@@ -68,14 +72,38 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
         
         if (data.type === 'message' && data.message) {
           // For regular messages, use ID + content + userId as the key
-          messageKey = `${data.message.id || 'temp'}-${data.message.content}-${data.message.userId}`;
+          // If ID exists, use it as the primary key
+          if (data.message.id) {
+            messageKey = `msg-${data.message.id}`;
+          } else {
+            // For messages without ID, use content hash + userId + approximate timestamp
+            const contentHash = data.message.content?.substring(0, 20) || 'empty';
+            const userId = data.message.userId || 'unknown';
+            const timestamp = Math.floor((data.message.createdAt ? 
+              new Date(data.message.createdAt).getTime() : 
+              Date.now()) / 1000); // Round to seconds
+            
+            messageKey = `msg-temp-${userId}-${contentHash}-${timestamp}`;
+          }
         } else if (data.type === 'reaction' && data.reaction) {
           // For reactions, use ID + type + userId as the key
-          messageKey = `reaction-${data.reaction.id || 'temp'}-${data.reaction.type}-${data.reaction.userId}`;
+          // For reactions, prefer using the reaction ID if available
+          if (data.reaction.id) {
+            messageKey = `reaction-${data.reaction.id}`;
+          } else {
+            messageKey = `reaction-temp-${data.reaction.userId || 'unknown'}-${data.reaction.type || 'unknown'}-${Date.now()}`;
+          }
+        } else if (data.type === 'room_status_update') {
+          // For room updates, use the roomId + status + timestamp
+          messageKey = `status-${data.roomId}-${data.room?.status || 'unknown'}-${Math.floor(Date.now() / 1000)}`;
         }
         
-        // Skip if we've already processed this exact message/reaction
+        // Log message key for debugging
+        console.log("WebSocket message key:", messageKey);
+        
+        // Skip if we've already processed this exact message/reaction in the last few seconds
         if (messageKey && processedMessagesRef.current.has(messageKey)) {
+          console.log("Skipping duplicate message:", messageKey);
           return;
         }
         
@@ -88,6 +116,12 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
             const entries = Array.from(processedMessagesRef.current);
             processedMessagesRef.current = new Set(entries.slice(-500)); // Keep the most recent 500
           }
+          
+          // Only keep messages for 10 seconds to allow reprocessing after a reasonable time
+          // This helps if the same message is legitimately sent again later
+          setTimeout(() => {
+            processedMessagesRef.current.delete(messageKey!);
+          }, 10000);
         }
         
         // Handle different message types

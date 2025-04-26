@@ -151,34 +151,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Handle reactions - improved to handle both string content and JSON format
+        // Handle reactions - completely rewritten for different message formats
         if (data.type === 'reaction' && userData) {
           try {
-            // Handle different reaction message formats
+            // Log full reaction data for debugging
+            console.log('Raw reaction data received:', JSON.stringify(data, null, 2));
+            
+            // Initialize reactionType as null
             let reactionType = null;
             
-            // Log the received data for debugging
-            console.log('Reaction data received:', JSON.stringify(data));
-            
-            // Check various formats the reaction might come in
+            // Handle all possible reaction formats:
+            // Format 1: { type: 'reaction', reactionType: '👍' }
             if (typeof data.reactionType === 'string') {
-              // Direct string format from client
               reactionType = data.reactionType;
-            } else if (data.content && typeof data.content === 'string') {
-              // JSON stringified format 
+              console.log('Format 1 reaction:', reactionType);
+            } 
+            // Format 2: Stringified JSON in content
+            else if (data.content && typeof data.content === 'string') {
               try {
-                const parsedContent = JSON.parse(data.content);
-                if (parsedContent && parsedContent.reactionType) {
-                  reactionType = parsedContent.reactionType;
+                // Try to parse if it's JSON 
+                if (data.content.startsWith('{') && data.content.endsWith('}')) {
+                  const parsedContent = JSON.parse(data.content);
+                  console.log('Parsed content:', parsedContent);
+                  
+                  if (parsedContent && parsedContent.reactionType) {
+                    reactionType = parsedContent.reactionType;
+                    console.log('Format 2 reaction from JSON content:', reactionType);
+                  }
                 }
               } catch (e) {
-                // Not valid JSON, ignore
+                console.error('Error parsing content as JSON:', e);
               }
             }
             
-            if (!reactionType) {
-              throw new Error('Invalid reaction format: missing reactionType');
+            // If we still don't have a reaction type, check for nested reaction object
+            if (!reactionType && data.reaction && typeof data.reaction === 'object') {
+              if (typeof data.reaction.type === 'string') {
+                reactionType = data.reaction.type;
+                console.log('Format 3 reaction from nested object:', reactionType);
+              }
             }
+            
+            // Final sanity check for valid emoji reaction
+            if (!reactionType) {
+              console.error('Could not find valid reaction type in message');
+              throw new Error('Invalid reaction format: missing or invalid reactionType');
+            }
+            
+            // Validate that the reaction is one of the allowed types
+            const validReactions = ['👍', '🎉', '❤️', '😂', '😮', '🙏'];
+            if (!validReactions.includes(reactionType)) {
+              console.error('Invalid reaction type:', reactionType);
+              throw new Error(`Invalid reaction type: ${reactionType}`);
+            }
+            
+            console.log(`Valid reaction ${reactionType} from user ${userData.userId} in room ${userData.roomId}`);
             
             // Get user info for richer context
             const user = await storage.getUser(userData.userId);
@@ -190,12 +217,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
               type: reactionType
             });
             
-            // Broadcast to all clients in the room with user info for context
-            const roomClients = roomConnections.get(userData.roomId) || new Set();
+            // Create a properly formatted reaction message
             const outMessage = JSON.stringify({
               type: 'reaction',
               reaction: {
-                ...reaction,
+                id: reaction.id,
+                roomId: reaction.roomId,
+                userId: reaction.userId,
+                type: reaction.type,
+                createdAt: reaction.createdAt,
                 user: {
                   id: user?.id,
                   username: user?.username
