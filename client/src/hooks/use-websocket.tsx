@@ -150,14 +150,53 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
             return newMap;
           });
         } else if (data.type === 'reaction') {
+          // Enhanced reaction handling with sender-side deduplication
+          
           // Handle the simplified reaction format (just emoji)
           if (data.emoji) {
             console.log("Received simplified reaction:", data.emoji);
             
-            // Create a unique key for this reaction
-            const reactionKey = `reaction-${Date.now()}-${data.emoji}-${data.userId}`;
+            // Create a more deterministic reaction key that will be the same 
+            // for both sent and received versions of the same reaction
+            // This is crucial for preventing duplicates on the sender side
+            const stableTimestampPart = data.timestamp ? 
+              new Date(data.timestamp).getTime() : 
+              Math.floor(Date.now() / 1000) * 1000; // Round to nearest second
+              
+            const reactionKey = `reaction-${stableTimestampPart}-${data.emoji}-${data.userId}`;
             
+            // Check if we already have this exact reaction in our messages map
+            // This avoids duplicating reactions on the sender side
             setMessages(prev => {
+              // First check if we already have this exact reaction
+              let hasExactMatch = false;
+              
+              // Look for an existing reaction with the same user and emoji within the last few seconds
+              for (const [key, msg] of prev.entries()) {
+                if (msg.type === 'reaction' && 
+                    msg.content === data.emoji && 
+                    msg.userId === data.userId) {
+                  
+                  // Check if the timestamps are close (within 5 seconds)
+                  const existingTime = new Date(msg.createdAt).getTime();
+                  const newTime = data.timestamp ? 
+                    new Date(data.timestamp).getTime() : 
+                    Date.now();
+                    
+                  if (Math.abs(existingTime - newTime) < 5000) {
+                    hasExactMatch = true;
+                    break;
+                  }
+                }
+              }
+              
+              // If we already have this reaction, don't add it again
+              if (hasExactMatch) {
+                console.log("Skipping duplicate reaction:", data.emoji);
+                return prev;
+              }
+              
+              // Otherwise add the new reaction
               const newMap = new Map(prev);
               
               // Create a simplified reaction object
@@ -178,7 +217,35 @@ export function useWebSocket({ enabled, roomId, userId }: WebSocketOptions) {
             console.log("Received legacy complex reaction:", data.reaction);
             const reaction = data.reaction;
             
+            // Use the same deduplication logic for legacy reactions
             setMessages(prev => {
+              // Check for existing similar reactions
+              let hasExactMatch = false;
+              
+              for (const [key, msg] of prev.entries()) {
+                if (msg.type === 'reaction' && 
+                    msg.content === reaction.type && 
+                    msg.userId === reaction.userId) {
+                  
+                  // Check if the timestamps are close
+                  const existingTime = new Date(msg.createdAt).getTime();
+                  const newTime = reaction.createdAt ? 
+                    new Date(reaction.createdAt).getTime() : 
+                    Date.now();
+                    
+                  if (Math.abs(existingTime - newTime) < 5000) {
+                    hasExactMatch = true;
+                    break;
+                  }
+                }
+              }
+              
+              // Skip if duplicate
+              if (hasExactMatch) {
+                console.log("Skipping duplicate legacy reaction");
+                return prev;
+              }
+              
               const newMap = new Map(prev);
               const reactionKey = reaction.id ? 
                 `reaction-${reaction.id}` : 
